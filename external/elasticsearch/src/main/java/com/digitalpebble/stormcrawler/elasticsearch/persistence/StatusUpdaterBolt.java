@@ -88,7 +88,7 @@ public class StatusUpdaterBolt extends AbstractStatusUpdaterBolt implements
     /** Store the key used for routing explicitly as a field in metadata **/
     private String fieldNameForRoutingKey = null;
 
-    private ElasticSearchConnection connection;
+    private static ElasticSearchConnection connection;
 
     private Cache<String, List<Tuple>> waitAck;
 
@@ -137,12 +137,17 @@ public class StatusUpdaterBolt extends AbstractStatusUpdaterBolt implements
             }
         }, 30);
 
-        try {
-            connection = ElasticSearchConnection.getConnection(stormConf,
-                    ESBoltType, this);
-        } catch (Exception e1) {
-            LOG.error("Can't connect to ElasticSearch", e1);
-            throw new RuntimeException(e1);
+        // one ES client per JVM
+        synchronized (StatusUpdaterBolt.class) {
+            try {
+                if (connection == null) {
+                    connection = ElasticSearchConnection.getConnection(
+                            stormConf, ESBoltType, this);
+                }
+            } catch (Exception e1) {
+                LOG.error("Can't connect to ElasticSearch", e1);
+                throw new RuntimeException(e1);
+            }
         }
 
         this.eventCounter = context.registerMetric("counters",
